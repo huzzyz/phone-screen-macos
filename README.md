@@ -57,6 +57,20 @@ brew install android-platform-tools scrcpy
 
 ## Install
 
+### Download the app
+
+1. Download [`Phone-Screen-darwin64.zip`](https://github.com/huzzyz/phone-screen-macos/releases/latest/download/Phone-Screen-darwin64.zip) from the latest release.
+2. Unzip it and move **Phone Screen.app** to `/Applications`.
+3. Install the required ADB and scrcpy tools if you have not already:
+
+   ```bash
+   brew install android-platform-tools scrcpy
+   ```
+
+The `darwin64` package works on both Apple silicon and Intel Macs because the launcher itself is architecture-independent. Homebrew installs the correct ADB and scrcpy binaries for your Mac.
+
+### Install from source
+
 Clone the project and install the app:
 
 ```bash
@@ -123,7 +137,7 @@ make package
 ```
 
 - `make build` creates `dist/Phone Screen.app`.
-- `make package` also creates a ZIP archive and SHA-256 checksum.
+- `make package` also creates `Phone-Screen-darwin64.zip` and its SHA-256 checksum.
 - `make install` builds and installs the app in `/Applications`.
 
 Tests use fixture commands and do not require a connected Android device.

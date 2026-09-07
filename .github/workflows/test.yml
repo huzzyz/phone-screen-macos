@@ -1,15 +1,50 @@
-name: Test
+name: Build and release
 
 on:
   push:
+    tags:
+      - "v*"
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
-  test:
+  build:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Test launcher
         run: make test
-      - name: Build app
-        run: make build
+      - name: Package darwin64 app
+        run: make package
+      - name: Upload darwin64 artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: Phone-Screen-darwin64
+          path: |
+            dist/Phone-Screen-darwin64.zip
+            dist/Phone-Screen-darwin64.zip.sha256
+          if-no-files-found: error
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download darwin64 artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: Phone-Screen-darwin64
+          path: dist
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME"
+          dist/Phone-Screen-darwin64.zip
+          dist/Phone-Screen-darwin64.zip.sha256
+          --verify-tag
+          --generate-notes
+          --title "Phone Screen $GITHUB_REF_NAME"
