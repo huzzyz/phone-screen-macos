@@ -1,0 +1,8 @@
+#!/bin/bash
+case "$1" in
+    start-server) exit 0 ;;
+    devices) printf 'List of devices attached\n' ;;
+    mdns) exit 0 ;;
+    connect) exit 1 ;;
+    *) exit 1 ;;
+esac

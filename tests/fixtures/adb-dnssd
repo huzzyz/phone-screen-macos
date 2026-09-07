@@ -1,0 +1,9 @@
+#!/bin/bash
+case "$1" in
+    start-server) exit 0 ;;
+    devices) printf 'List of devices attached\n' ;;
+    mdns) exit 0 ;;
+    connect) [ "$2" = "192.0.2.20:43210" ] ;;
+    -s) [ "$2" = "192.0.2.20:43210" ] && [ "$3" = "get-state" ] && printf 'device\n' ;;
+    *) exit 1 ;;
+esac

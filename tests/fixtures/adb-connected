@@ -1,0 +1,7 @@
+#!/bin/bash
+case "$1" in
+    start-server) exit 0 ;;
+    devices) printf 'List of devices attached\n192.0.2.10:37123\tdevice product:test model:Test_Phone\n' ;;
+    -s) [ "$3" = "get-state" ] && printf 'device\n' ;;
+    *) exit 0 ;;
+esac

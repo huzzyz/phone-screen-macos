@@ -1,0 +1,134 @@
+#!/bin/bash
+set -u
+
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
+ADB_BIN="${PHONE_SCREEN_ADB_BIN:-$(command -v adb 2>/dev/null || true)}"
+SCRCPY_BIN="${PHONE_SCREEN_SCRCPY_BIN:-$(command -v scrcpy 2>/dev/null || true)}"
+DNSSD_BIN="${PHONE_SCREEN_DNSSD_BIN:-/usr/bin/dns-sd}"
+HOST_LOOKUP_BIN="${PHONE_SCREEN_HOST_LOOKUP_BIN:-/usr/bin/dscacheutil}"
+OSASCRIPT_BIN="${PHONE_SCREEN_OSASCRIPT_BIN:-/usr/bin/osascript}"
+DISCOVERY_SECONDS="${PHONE_SCREEN_DISCOVERY_SECONDS:-3}"
+CACHE_DIR="${PHONE_SCREEN_CACHE_DIR:-$HOME/.cache/phone-screen}"
+CACHE="$CACHE_DIR/last-endpoint"
+
+mkdir -p "$CACHE_DIR"
+
+fail() {
+    local message="$1"
+    printf 'Phone Screen: %s\n' "$message" >&2
+
+    if [ "${PHONE_SCREEN_NO_GUI:-0}" != "1" ] && [ -x "$OSASCRIPT_BIN" ]; then
+        "$OSASCRIPT_BIN" - "$message" <<'APPLESCRIPT' >/dev/null 2>&1
+on run argv
+    set failureMessage to item 1 of argv
+    display notification failureMessage with title "Phone Screen" subtitle "Connection failed"
+    tell application "System Events"
+        activate
+        display alert "Phone Screen" message failureMessage as warning buttons {"OK"} default button "OK"
+    end tell
+end run
+APPLESCRIPT
+    fi
+    exit 1
+}
+
+require_tools() {
+    [ -x "$ADB_BIN" ] || fail "ADB is missing. Install it with: brew install android-platform-tools"
+    [ -x "$SCRCPY_BIN" ] || fail "scrcpy is missing. Install it with: brew install scrcpy"
+}
+
+alive() {
+    [ -n "$1" ] && "$ADB_BIN" -s "$1" get-state 2>/dev/null | grep -qx device
+}
+
+connect_endpoint() {
+    local endpoint="$1"
+    [ -n "$endpoint" ] || return 1
+    "$ADB_BIN" connect "$endpoint" >/dev/null 2>&1
+    alive "$endpoint"
+}
+
+find_connected() {
+    local serial
+    while IFS= read -r serial; do
+        alive "$serial" && { printf '%s\n' "$serial"; return 0; }
+    done < <("$ADB_BIN" devices -l 2>/dev/null | awk 'NR > 1 && $2 == "device" {print $1}')
+    return 1
+}
+
+discover_with_adb() {
+    local endpoint
+    while IFS= read -r endpoint; do
+        connect_endpoint "$endpoint" && { printf '%s\n' "$endpoint"; return 0; }
+    done < <("$ADB_BIN" mdns services 2>/dev/null | awk -F'\t' '/_adb-tls-connect/{print $NF}')
+    return 1
+}
+
+discover_with_dnssd() {
+    local work browse_pid instance lookup_pid target host port ip endpoint
+    [ -x "$DNSSD_BIN" ] || return 1
+    [ -x "$HOST_LOOKUP_BIN" ] || return 1
+    work="$(mktemp -d /tmp/phone-screen.XXXXXX)" || return 1
+
+    "$DNSSD_BIN" -B _adb-tls-connect._tcp local. >"$work/browse" 2>&1 &
+    browse_pid=$!
+    sleep "$DISCOVERY_SECONDS"
+    kill "$browse_pid" >/dev/null 2>&1 || true
+    wait "$browse_pid" 2>/dev/null || true
+    sed -nE 's/^.*_adb-tls-connect\._tcp\. //p' "$work/browse" | awk '!seen[$0]++' >"$work/instances"
+
+    while IFS= read -r instance; do
+        [ -n "$instance" ] || continue
+        "$DNSSD_BIN" -L "$instance" _adb-tls-connect._tcp local. >"$work/lookup" 2>&1 &
+        lookup_pid=$!
+        sleep 1
+        kill "$lookup_pid" >/dev/null 2>&1 || true
+        wait "$lookup_pid" 2>/dev/null || true
+
+        target="$(sed -nE 's/^.*reached at ([^ ]+):([0-9]+).*$/\1 \2/p' "$work/lookup" | head -n 1)"
+        host="${target% *}"
+        port="${target##* }"
+        host="${host%.}"
+        [ -n "$host" ] && [ "$port" != "$target" ] || continue
+
+        ip="$("$HOST_LOOKUP_BIN" -q host -a name "$host" 2>/dev/null | awk '/ip_address:/{print $2; exit}')"
+        [ -n "$ip" ] || continue
+        endpoint="$ip:$port"
+        if connect_endpoint "$endpoint"; then
+            rm -rf "$work"
+            printf '%s\n' "$endpoint"
+            return 0
+        fi
+    done <"$work/instances"
+
+    rm -rf "$work"
+    return 1
+}
+
+main() {
+    local serial="" last=""
+    require_tools
+    "$ADB_BIN" start-server >/dev/null 2>&1
+
+    serial="$(find_connected)"
+    [ -n "$serial" ] || serial="$(discover_with_adb)"
+    [ -n "$serial" ] || serial="$(discover_with_dnssd)"
+
+    if [ -z "$serial" ] && [ -f "$CACHE" ]; then
+        last="$(cat "$CACHE")"
+        connect_endpoint "$last" && serial="$last"
+    fi
+
+    [ -n "$serial" ] || fail "No Android device was found. Enable Developer options > Wireless debugging, keep the phone unlocked for a few seconds, then open Phone Screen again. If this Mac has not been paired before, use Pair device with pairing code once."
+    printf '%s\n' "$serial" >"$CACHE"
+
+    if [ "${PHONE_SCREEN_TEST:-0}" = "1" ]; then
+        printf '%s\n' "$serial"
+        return 0
+    fi
+
+    exec "$SCRCPY_BIN" --serial "$serial" --window-title="Phone Screen"
+}
+
+main "$@"

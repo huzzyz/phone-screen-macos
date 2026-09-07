@@ -1,0 +1,6 @@
+#!/bin/bash
+case "$1" in
+    -B) printf '12:00:00.000 Add 2 12 local. _adb-tls-connect._tcp. adb-test-device\n' ;;
+    -L) printf 'adb-test-device._adb-tls-connect._tcp.local. can be reached at Android-Test.local.:43210 (interface 12)\n' ;;
+    *) exit 1 ;;
+esac

@@ -1,0 +1,2 @@
+#!/bin/bash
+printf 'name: android-test.local\nip_address: 192.0.2.20\n'
