@@ -2,6 +2,9 @@
 case "$1" in
     start-server) exit 0 ;;
     devices) printf 'List of devices attached\n192.0.2.10:37123\tdevice product:test model:Test_Phone\n' ;;
-    -s) [ "$3" = "get-state" ] && printf 'device\n' ;;
+    -s)
+        [ "$3" = "get-state" ] && printf 'device\n'
+        [ "$3" = "shell" ] && [ "$5" = "ro.serialno" ] && printf 'PHONE-ONE\n'
+        ;;
     *) exit 0 ;;
 esac

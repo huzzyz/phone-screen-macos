@@ -11,6 +11,7 @@ OSASCRIPT_BIN="${PHONE_SCREEN_OSASCRIPT_BIN:-/usr/bin/osascript}"
 DISCOVERY_SECONDS="${PHONE_SCREEN_DISCOVERY_SECONDS:-3}"
 CACHE_DIR="${PHONE_SCREEN_CACHE_DIR:-$HOME/.cache/phone-screen}"
 CACHE="$CACHE_DIR/last-endpoint"
+DEVICE_CACHE="$CACHE_DIR/device-serial"
 LOG="$CACHE_DIR/last-run.log"
 
 mkdir -p "$CACHE_DIR"
@@ -48,28 +49,56 @@ connect_endpoint() {
     alive "$endpoint"
 }
 
-find_connected_wireless() {
-    local serial
+device_identity() {
+    [ -n "$1" ] || return 1
+    "$ADB_BIN" -s "$1" shell getprop ro.serialno 2>/dev/null | tr -d '\r\n'
+}
+
+select_connected_wireless() {
+    local preferred="" serial identity first_serial="" first_identity=""
+    [ -s "$DEVICE_CACHE" ] && preferred="$(tr -d '\r\n' <"$DEVICE_CACHE")"
+
     while IFS= read -r serial; do
         case "$serial" in
-            *._adb-tls-connect._tcp|*._adb-tls-connect._tcp.|[0-9]*.[0-9]*.[0-9]*.[0-9]*:[0-9]*)
-                alive "$serial" && { printf '%s\n' "$serial"; return 0; }
+            *:*)
+                alive "$serial" || continue
+                identity="$(device_identity "$serial")"
+                [ -n "$identity" ] || continue
+
+                if [ -n "$preferred" ] && [ "$identity" = "$preferred" ]; then
+                    printf '%s\n' "$serial"
+                    return 0
+                fi
+
+                if [ -z "$first_serial" ]; then
+                    first_serial="$serial"
+                    first_identity="$identity"
+                elif [ "$identity" != "$first_identity" ] && [ -z "$preferred" ]; then
+                    return 2
+                fi
                 ;;
         esac
     done < <("$ADB_BIN" devices -l 2>/dev/null | awk 'NR > 1 && $2 == "device" {print $1}')
+
+    [ -z "$preferred" ] || return 3
+    if [ -n "$first_serial" ]; then
+        printf '%s\n' "$first_identity" >"$DEVICE_CACHE"
+        printf '%s\n' "$first_serial"
+        return 0
+    fi
     return 1
 }
 
 discover_with_adb() {
-    local endpoint
+    local endpoint found=1
     while IFS= read -r endpoint; do
-        connect_endpoint "$endpoint" && { printf '%s\n' "$endpoint"; return 0; }
+        connect_endpoint "$endpoint" && found=0
     done < <("$ADB_BIN" mdns services 2>/dev/null | awk -F'\t' '/_adb-tls-connect/{print $NF}')
-    return 1
+    return "$found"
 }
 
 discover_with_dnssd() {
-    local work browse_pid instance lookup_pid target host port ip endpoint
+    local work browse_pid instance lookup_pid target host port ip endpoint found=1
     [ -x "$DNSSD_BIN" ] || return 1
     [ -x "$HOST_LOOKUP_BIN" ] || return 1
     work="$(mktemp -d /tmp/phone-screen.XXXXXX)" || return 1
@@ -99,30 +128,42 @@ discover_with_dnssd() {
         [ -n "$ip" ] || continue
         endpoint="$ip:$port"
         if connect_endpoint "$endpoint"; then
-            rm -rf "$work"
-            printf '%s\n' "$endpoint"
-            return 0
+            found=0
         fi
     done <"$work/instances"
 
     rm -rf "$work"
-    return 1
+    return "$found"
 }
 
 main() {
-    local serial="" last="" status=0 detail=""
+    local serial="" last="" status=0 selection_status=1 detail=""
     require_tools
     "$ADB_BIN" start-server >/dev/null 2>&1
 
-    serial="$(find_connected_wireless)"
-    [ -n "$serial" ] || serial="$(discover_with_adb)"
-    [ -n "$serial" ] || serial="$(discover_with_dnssd)"
-
-    if [ -z "$serial" ] && [ -f "$CACHE" ]; then
+    if [ -f "$CACHE" ]; then
         last="$(cat "$CACHE")"
-        connect_endpoint "$last" && serial="$last"
+        connect_endpoint "$last" || true
     fi
 
+    discover_with_adb || true
+    if serial="$(select_connected_wireless)"; then
+        selection_status=0
+    else
+        selection_status=$?
+    fi
+
+    if [ -z "$serial" ] && [ "$selection_status" -ne 2 ]; then
+        discover_with_dnssd || true
+        if serial="$(select_connected_wireless)"; then
+            selection_status=0
+        else
+            selection_status=$?
+        fi
+    fi
+
+    [ "$selection_status" -ne 2 ] || fail "More than one wireless Android phone was found. Disconnect the others, then reopen Phone Screen to enroll the phone you want to use."
+    [ "$selection_status" -ne 3 ] || fail "Your enrolled Android phone was not found. Enable Wireless debugging on that phone. To choose a different phone, delete $DEVICE_CACHE and reopen Phone Screen."
     [ -n "$serial" ] || fail "No Android device was found. Enable Developer options > Wireless debugging, keep the phone unlocked for a few seconds, then open Phone Screen again. If this Mac has not been paired before, use Pair device with pairing code once."
     printf '%s\n' "$serial" >"$CACHE"
 

@@ -1,7 +1,11 @@
 #!/bin/bash
 case "$1" in
     start-server) exit 0 ;;
-    devices) printf 'List of devices attached\nG090LF1072031ESQ\tdevice product:tablet model:Unrelated_USB_Device\nadb-phone._adb-tls-connect._tcp\tdevice product:test model:Test_Phone\n' ;;
-    -s) [ "$2" = "adb-phone._adb-tls-connect._tcp" ] && [ "$3" = "get-state" ] && printf 'device\n' ;;
+    devices) printf 'List of devices attached\nG090LF1072031ESQ\tdevice product:tablet model:Unrelated_USB_Device\n192.0.2.10:37123\tdevice product:test model:Test_Phone\n' ;;
+    -s)
+        [ "$2" = "192.0.2.10:37123" ] || exit 1
+        [ "$3" = "get-state" ] && printf 'device\n'
+        [ "$3" = "shell" ] && [ "$5" = "ro.serialno" ] && printf 'PHONE-ONE\n'
+        ;;
     *) exit 1 ;;
 esac

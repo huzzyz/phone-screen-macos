@@ -1,0 +1,14 @@
+#!/bin/bash
+case "$1" in
+    start-server) exit 0 ;;
+    devices) printf 'List of devices attached\n192.0.2.10:37123\tdevice model:Phone_One\n192.0.2.11:37124\tdevice model:Phone_Two\n' ;;
+    mdns) exit 0 ;;
+    -s)
+        [ "$3" = "get-state" ] && printf 'device\n'
+        if [ "$3" = "shell" ] && [ "$5" = "ro.serialno" ]; then
+            [ "$2" = "192.0.2.10:37123" ] && printf 'PHONE-ONE\n'
+            [ "$2" = "192.0.2.11:37124" ] && printf 'PHONE-TWO\n'
+        fi
+        ;;
+    *) exit 1 ;;
+esac

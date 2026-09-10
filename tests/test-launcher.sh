@@ -9,11 +9,33 @@ FIXTURES="$ROOT/tests/fixtures"
 result="$(PHONE_SCREEN_ADB_BIN="$FIXTURES/adb-connected" PHONE_SCREEN_SCRCPY_BIN="$FIXTURES/scrcpy" PHONE_SCREEN_CACHE_DIR="$WORK/cache" PHONE_SCREEN_NO_GUI=1 PHONE_SCREEN_TEST=1 "$ROOT/src/phone-screen")"
 [ "$result" = "192.0.2.10:37123" ]
 [ "$(cat "$WORK/cache/last-endpoint")" = "$result" ]
+[ "$(cat "$WORK/cache/device-serial")" = "PHONE-ONE" ]
 printf 'PASS connected device discovery\n'
 
 result="$(PHONE_SCREEN_ADB_BIN="$FIXTURES/adb-mixed" PHONE_SCREEN_SCRCPY_BIN="$FIXTURES/scrcpy" PHONE_SCREEN_CACHE_DIR="$WORK/mixed-cache" PHONE_SCREEN_NO_GUI=1 PHONE_SCREEN_TEST=1 "$ROOT/src/phone-screen")"
-[ "$result" = "adb-phone._adb-tls-connect._tcp" ]
+[ "$result" = "192.0.2.10:37123" ]
 printf 'PASS unrelated USB device is ignored\n'
+
+mkdir -p "$WORK/changed-port-cache"
+printf 'PHONE-ONE\n' >"$WORK/changed-port-cache/device-serial"
+printf '192.0.2.10:37123\n' >"$WORK/changed-port-cache/last-endpoint"
+result="$(PHONE_SCREEN_ADB_BIN="$FIXTURES/adb-changed-port" PHONE_SCREEN_SCRCPY_BIN="$FIXTURES/scrcpy" PHONE_SCREEN_CACHE_DIR="$WORK/changed-port-cache" PHONE_SCREEN_NO_GUI=1 PHONE_SCREEN_TEST=1 "$ROOT/src/phone-screen")"
+[ "$result" = "192.0.2.10:49999" ]
+[ "$(cat "$WORK/changed-port-cache/device-serial")" = "PHONE-ONE" ]
+printf 'PASS enrolled phone survives endpoint change\n'
+
+if PHONE_SCREEN_ADB_BIN="$FIXTURES/adb-ambiguous" PHONE_SCREEN_SCRCPY_BIN="$FIXTURES/scrcpy" PHONE_SCREEN_DNSSD_BIN="$WORK/missing-dnssd" PHONE_SCREEN_CACHE_DIR="$WORK/ambiguous-cache" PHONE_SCREEN_NO_GUI=1 PHONE_SCREEN_TEST=1 "$ROOT/src/phone-screen" >"$WORK/ambiguous-out" 2>"$WORK/ambiguous-err"; then
+    printf 'FAIL ambiguous-device path returned success\n' >&2
+    exit 1
+fi
+grep -q 'More than one wireless Android phone was found' "$WORK/ambiguous-err"
+printf 'PASS distinct wireless phones are not selected arbitrarily\n'
+
+mkdir -p "$WORK/enrolled-multiple-cache"
+printf 'PHONE-TWO\n' >"$WORK/enrolled-multiple-cache/device-serial"
+result="$(PHONE_SCREEN_ADB_BIN="$FIXTURES/adb-ambiguous" PHONE_SCREEN_SCRCPY_BIN="$FIXTURES/scrcpy" PHONE_SCREEN_CACHE_DIR="$WORK/enrolled-multiple-cache" PHONE_SCREEN_NO_GUI=1 PHONE_SCREEN_TEST=1 "$ROOT/src/phone-screen")"
+[ "$result" = "192.0.2.11:37124" ]
+printf 'PASS enrolled identity selects the correct wireless phone\n'
 
 result="$(PHONE_SCREEN_ADB_BIN="$FIXTURES/adb-mdns" PHONE_SCREEN_SCRCPY_BIN="$FIXTURES/scrcpy" PHONE_SCREEN_CACHE_DIR="$WORK/mdns-cache" PHONE_SCREEN_NO_GUI=1 PHONE_SCREEN_TEST=1 "$ROOT/src/phone-screen")"
 [ "$result" = "192.0.2.15:39111" ]
