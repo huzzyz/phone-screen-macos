@@ -22,7 +22,7 @@ Android may assign a new wireless ADB port whenever Wireless debugging is restar
 
 ```mermaid
 flowchart LR
-    A[Open Phone Screen] --> B{Connected ADB device?}
+    A[Open Phone Screen] --> B{Connected wireless ADB device?}
     B -- Yes --> F[Open scrcpy]
     B -- No --> C[Try last known endpoint]
     C --> D[Discover via ADB mDNS]
@@ -34,7 +34,7 @@ flowchart LR
 
 Phone Screen tries, in order:
 
-1. An already-connected ADB device.
+1. An already-connected wireless ADB device. Unrelated USB ADB devices are ignored.
 2. The last endpoint that worked.
 3. Devices advertised through `adb mdns services`.
 4. Native macOS DNS-SD discovery.
@@ -107,6 +107,8 @@ Pairing normally persists. You should not need to repeat it when Android changes
 
 Phone Screen discovers the current endpoint and opens scrcpy. When Wireless debugging is off or the phone cannot be reached, it tells you what to check instead of silently doing nothing.
 
+If another Android-based device is attached over USB, Phone Screen ignores it. Only wireless ADB endpoints are eligible, preventing a tablet, streaming device, or other USB target from being opened accidentally.
+
 ## Troubleshooting
 
 ### “No Android device found”
@@ -127,6 +129,10 @@ brew install android-platform-tools scrcpy
 ### More than one phone is connected
 
 Phone Screen opens the first verified device it finds. Disconnect or disable Wireless debugging on the other device before launching if you need a specific phone.
+
+### The phone is found but no window opens
+
+Phone Screen displays the final scrcpy error and saves the complete output to `~/.cache/phone-screen/last-run.log` so startup failures are no longer silent.
 
 ## Build and test
 

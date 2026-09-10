@@ -11,6 +11,7 @@ OSASCRIPT_BIN="${PHONE_SCREEN_OSASCRIPT_BIN:-/usr/bin/osascript}"
 DISCOVERY_SECONDS="${PHONE_SCREEN_DISCOVERY_SECONDS:-3}"
 CACHE_DIR="${PHONE_SCREEN_CACHE_DIR:-$HOME/.cache/phone-screen}"
 CACHE="$CACHE_DIR/last-endpoint"
+LOG="$CACHE_DIR/last-run.log"
 
 mkdir -p "$CACHE_DIR"
 
@@ -23,10 +24,8 @@ fail() {
 on run argv
     set failureMessage to item 1 of argv
     display notification failureMessage with title "Phone Screen" subtitle "Connection failed"
-    tell application "System Events"
-        activate
-        display alert "Phone Screen" message failureMessage as warning buttons {"OK"} default button "OK"
-    end tell
+    activate
+    display dialog failureMessage with title "Phone Screen" with icon caution buttons {"OK"} default button "OK"
 end run
 APPLESCRIPT
     fi
@@ -49,10 +48,14 @@ connect_endpoint() {
     alive "$endpoint"
 }
 
-find_connected() {
+find_connected_wireless() {
     local serial
     while IFS= read -r serial; do
-        alive "$serial" && { printf '%s\n' "$serial"; return 0; }
+        case "$serial" in
+            *._adb-tls-connect._tcp|*._adb-tls-connect._tcp.|[0-9]*.[0-9]*.[0-9]*.[0-9]*:[0-9]*)
+                alive "$serial" && { printf '%s\n' "$serial"; return 0; }
+                ;;
+        esac
     done < <("$ADB_BIN" devices -l 2>/dev/null | awk 'NR > 1 && $2 == "device" {print $1}')
     return 1
 }
@@ -107,11 +110,11 @@ discover_with_dnssd() {
 }
 
 main() {
-    local serial="" last=""
+    local serial="" last="" status=0 detail=""
     require_tools
     "$ADB_BIN" start-server >/dev/null 2>&1
 
-    serial="$(find_connected)"
+    serial="$(find_connected_wireless)"
     [ -n "$serial" ] || serial="$(discover_with_adb)"
     [ -n "$serial" ] || serial="$(discover_with_dnssd)"
 
@@ -128,7 +131,13 @@ main() {
         return 0
     fi
 
-    exec "$SCRCPY_BIN" --serial "$serial" --window-title="Phone Screen"
+    : >"$LOG"
+    "$SCRCPY_BIN" --serial "$serial" --window-title="Phone Screen" >"$LOG" 2>&1 || status=$?
+    if [ "$status" -ne 0 ]; then
+        detail="$(tail -n 3 "$LOG" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+        [ -n "$detail" ] || detail="scrcpy exited with status $status"
+        fail "The phone was found, but screen mirroring could not start. $detail"
+    fi
 }
 
 main "$@"
