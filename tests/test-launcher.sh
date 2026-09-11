@@ -10,6 +10,8 @@ result="$(PHONE_SCREEN_ADB_BIN="$FIXTURES/adb-connected" PHONE_SCREEN_SCRCPY_BIN
 [ "$result" = "192.0.2.10:37123" ]
 [ "$(cat "$WORK/cache/last-endpoint")" = "$result" ]
 [ "$(cat "$WORK/cache/device-serial")" = "PHONE-ONE" ]
+! grep -q '^mdns services$' "$WORK/cache/adb-calls"
+! grep -q '^connect ' "$WORK/cache/adb-calls"
 printf 'PASS connected device discovery\n'
 
 result="$(PHONE_SCREEN_ADB_BIN="$FIXTURES/adb-mixed" PHONE_SCREEN_SCRCPY_BIN="$FIXTURES/scrcpy" PHONE_SCREEN_CACHE_DIR="$WORK/mixed-cache" PHONE_SCREEN_NO_GUI=1 PHONE_SCREEN_TEST=1 "$ROOT/src/phone-screen")"

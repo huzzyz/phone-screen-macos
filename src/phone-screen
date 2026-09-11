@@ -141,16 +141,32 @@ main() {
     require_tools
     "$ADB_BIN" start-server >/dev/null 2>&1
 
-    if [ -f "$CACHE" ]; then
-        last="$(cat "$CACHE")"
-        connect_endpoint "$last" || true
-    fi
-
-    discover_with_adb || true
+    # Reuse an existing connection before trying cached or discovered endpoints.
+    # Android may advertise the same device more than once over mDNS, and every
+    # unnecessary `adb connect` can produce another Wireless debugging notice.
     if serial="$(select_connected_wireless)"; then
         selection_status=0
     else
         selection_status=$?
+    fi
+
+    if [ -z "$serial" ] && [ "$selection_status" -ne 2 ] && [ -f "$CACHE" ]; then
+        last="$(cat "$CACHE")"
+        connect_endpoint "$last" || true
+        if serial="$(select_connected_wireless)"; then
+            selection_status=0
+        else
+            selection_status=$?
+        fi
+    fi
+
+    if [ -z "$serial" ] && [ "$selection_status" -ne 2 ]; then
+        discover_with_adb || true
+        if serial="$(select_connected_wireless)"; then
+            selection_status=0
+        else
+            selection_status=$?
+        fi
     fi
 
     if [ -z "$serial" ] && [ "$selection_status" -ne 2 ]; then
