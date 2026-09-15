@@ -62,3 +62,10 @@ grep -q 'screen mirroring could not start' "$WORK/scrcpy-err"
 grep -q 'device disconnected during startup' "$WORK/scrcpy-err"
 grep -q 'device disconnected during startup' "$WORK/scrcpy-failure-cache/last-run.log"
 printf 'PASS scrcpy startup failure is reported and logged\n'
+
+PHONE_SCREEN_ADB_BIN="$FIXTURES/adb-connected" PHONE_SCREEN_SCRCPY_BIN="$FIXTURES/scrcpy-audio-fallback" PHONE_SCREEN_CACHE_DIR="$WORK/audio-fallback-cache" PHONE_SCREEN_NO_GUI=1 "$ROOT/src/phone-screen"
+[ "$(wc -l <"$WORK/audio-fallback-cache/scrcpy-calls" | tr -d ' ')" = "2" ]
+grep -q -- '--no-audio' "$WORK/audio-fallback-cache/scrcpy-calls"
+grep -q 'CoreAudio unavailable; retrying without audio' "$WORK/audio-fallback-cache/last-run.log"
+grep -q 'video-only fallback started' "$WORK/audio-fallback-cache/last-run.log"
+printf 'PASS CoreAudio startup failure retries without audio\n'

@@ -190,6 +190,11 @@ main() {
 
     : >"$LOG"
     "$SCRCPY_BIN" --serial "$serial" --window-title="Phone Screen" >"$LOG" 2>&1 || status=$?
+    if [ "$status" -ne 0 ] && grep -q 'Could not open audio device: CoreAudio error' "$LOG"; then
+        printf '\nPhone Screen: CoreAudio unavailable; retrying without audio.\n' >>"$LOG"
+        status=0
+        "$SCRCPY_BIN" --serial "$serial" --window-title="Phone Screen" --no-audio >>"$LOG" 2>&1 || status=$?
+    fi
     if [ "$status" -ne 0 ]; then
         detail="$(tail -n 3 "$LOG" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
         [ -n "$detail" ] || detail="scrcpy exited with status $status"

@@ -145,6 +145,8 @@ Leave Wireless debugging enabled only on the replacement phone and open Phone Sc
 
 Phone Screen displays the final scrcpy error and saves the complete output to `~/.cache/phone-screen/last-run.log` so startup failures are no longer silent.
 
+If macOS cannot start scrcpy's CoreAudio output, Phone Screen automatically retries in video-only mode. Device control and screen mirroring remain available; only phone audio is omitted for that session. Other scrcpy failures are still reported normally.
+
 ## Build and test
 
 ```bash

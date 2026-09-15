@@ -1,0 +1,13 @@
+#!/bin/bash
+printf '%s\n' "$*" >>"$PHONE_SCREEN_CACHE_DIR/scrcpy-calls"
+
+case " $* " in
+    *" --no-audio "*)
+        printf 'INFO: video-only fallback started\n'
+        exit 0
+        ;;
+esac
+
+printf 'ERROR: Could not open audio device: CoreAudio error (AudioQueueStart): 1937010544\n' >&2
+printf 'ERROR: Demuxer error\n' >&2
+exit 2
